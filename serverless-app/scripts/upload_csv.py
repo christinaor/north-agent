@@ -8,6 +8,6 @@ def upload_csv_to_s3(file_path, bucket_name, key):
 if __name__ == "__main__":
     upload_csv_to_s3(
         "data/university_mental_health_iot_dataset.csv",
-        "north-agent-stack-stresscsvbucket-9x9vdndxu5mt",
+        "placeholder-bucket-name",
         "stress-raw.csv"
     )

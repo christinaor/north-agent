@@ -29,33 +29,13 @@ Resources:
                   KeyType: RANGE
             StreamSpecification:
                 StreamViewType: NEW_IMAGE
-    # # Existing DynamoDB table for user events
-    # UserTable:
-    #     Type: AWS::DynamoDB::Table
-    #     Properties:
-    #         TableName: UserEvents
-    #         BillingMode: PAY_PER_REQUEST
-    #         AttributeDefinitions:
-    #             - AttributeName: userId
-    #               AttributeType: S
-    #         KeySchema:
-    #             - AttributeName: userId
-    #               KeyType: HASH
-    #         StreamSpecification:
-    #             StreamViewType: NEW_IMAGE
-
     CSVProcessor:
         Type: AWS::Serverless::Function
         Properties:
-            CodeUri: py-lambda/
-            Handler: app.lambda_handler
+            CodeUri: py-lambda/db/
+            Handler: handler.lambda_handler
             Runtime: python3.11
             Events:
-                # Api:
-                #     Type: Api
-                #     Properties:
-                #         Path: /user-python
-                #         Method: post
                 S3Upload:
                     Type: S3
                     Properties:
@@ -73,7 +53,7 @@ Resources:
                         Action:
                             - s3:GetObject
                         Resource:
-                            - arn:aws:s3:::north-agent-stack-stresscsvbucket-9x9vdndxu5mt/*
+                            - arn:aws:s3:::placeholder-bucket-name/*
                 - S3ReadPolicy:
                       BucketName: stress-csv-bucket
                 - DynamoDBCrudPolicy:
@@ -81,8 +61,38 @@ Resources:
             Environment:
                 Variables:
                     DDB_TABLE: HighStressUsers
-# Outputs:
-#     ApiUrl:
-#         Description: 'API Gateway endpoint'
-#         Value:
-#             Fn::Sub: 'https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/user'
+    AlertProcessor:
+        Type: AWS::Serverless::Function
+        Properties:
+            CodeUri: py-lambda/alert-processor/
+            Handler: handler.lambda_handler
+            Runtime: python3.11
+            Timeout: 10
+            Events:
+                StreamEvent:
+                    Type: DynamoDB
+                    Properties:
+                        Stream: !GetAtt HighStressUsers.StreamArn
+                        StartingPosition: TRIM_HORIZON
+            Policies:
+                - AWSLambdaBasicExecutionRole
+    GetStressAlerts:
+        Type: AWS::Serverless::Function
+        Properties:
+            CodeUri: py-lambda/api/
+            Handler: handler.lambda_handler
+            Runtime: python3.11
+            Timeout: 10
+            Events:
+                AlertsAPI:
+                    Type: Api
+                    Properties:
+                        Path: /alerts
+                        Method: get
+            Policies:
+                - AWSLambdaBasicExecutionRole
+                - DynamoDBReadPolicy:
+                      TableName: HighStressUsers
+            Environment:
+                Variables:
+                    DDB_TABLE: HighStressUsers

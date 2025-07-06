@@ -1,7 +1,7 @@
 import csv
 import boto3
 from datetime import datetime
-from db import store_user_data_batch, convert_row_to_item
+from utils.process_db import store_user_data_batch, convert_row_to_item
 from model import compute_stress_score, is_high_stress
 
 def lambda_handler(event, context):
