@@ -7,62 +7,82 @@ Globals:
         Timeout: 10
 
 Resources:
-    UserTable:
+    # 🔹 New S3 bucket that triggers PyLambda on .csv upload
+    StressCSVBucket:
+        Type: AWS::S3::Bucket
+
+    # 🔹 New DynamoDB table for stress alerts
+    HighStressUsers:
         Type: AWS::DynamoDB::Table
         Properties:
-            TableName: UserEvents
-            BillingMode: PAYPERREQUEST
+            TableName: HighStressUsers
+            BillingMode: PAY_PER_REQUEST
             AttributeDefinitions:
-                - AttributeName: userId
+                - AttributeName: user_id
+                  AttributeType: S
+                - AttributeName: timestamp
                   AttributeType: S
             KeySchema:
-                - AttributeName: userId
+                - AttributeName: user_id
                   KeyType: HASH
+                - AttributeName: timestamp
+                  KeyType: RANGE
             StreamSpecification:
                 StreamViewType: NEW_IMAGE
+    # # Existing DynamoDB table for user events
+    # UserTable:
+    #     Type: AWS::DynamoDB::Table
+    #     Properties:
+    #         TableName: UserEvents
+    #         BillingMode: PAY_PER_REQUEST
+    #         AttributeDefinitions:
+    #             - AttributeName: userId
+    #               AttributeType: S
+    #         KeySchema:
+    #             - AttributeName: userId
+    #               KeyType: HASH
+    #         StreamSpecification:
+    #             StreamViewType: NEW_IMAGE
 
-    TSLambda:
-        Type: AWS::Serverless::Function
-        Properties:
-            CodeUri: ts-lambda/
-            Handler: dist/app.handler
-            Runtime: nodejs18.x
-            Events:
-                Api:
-                    Type: Api
-                    Properties:
-                        Path: /user
-                        Method: post
-            Environment:
-                Variables:
-                    PGHOST: 'host.docker.internal'
-                    PGUSER: 'postgres'
-                    PGPASSWORD: 'example'
-                    PGDATABASE: 'users'
-                    PGPORT: '5454'
-
-    PyLambda:
+    CSVProcessor:
         Type: AWS::Serverless::Function
         Properties:
             CodeUri: py-lambda/
             Handler: app.lambda_handler
             Runtime: python3.11
             Events:
-                Api:
-                    Type: Api
+                # Api:
+                #     Type: Api
+                #     Properties:
+                #         Path: /user-python
+                #         Method: post
+                S3Upload:
+                    Type: S3
                     Properties:
-                        Path: /user-python
-                        Method: post
+                        Bucket: !Ref StressCSVBucket
+                        Events: s3:ObjectCreated:*
+                        Filter:
+                            S3Key:
+                                Rules:
+                                    - Name: suffix
+                                      Value: .csv
+            Policies:
+                - AWSLambdaBasicExecutionRole
+                - Statement:
+                      - Effect: Allow
+                        Action:
+                            - s3:GetObject
+                        Resource:
+                            - arn:aws:s3:::north-agent-stack-stresscsvbucket-9x9vdndxu5mt/*
+                - S3ReadPolicy:
+                      BucketName: stress-csv-bucket
+                - DynamoDBCrudPolicy:
+                      TableName: HighStressUsers
             Environment:
                 Variables:
-                    PGHOST: 'host.docker.internal'
-                    PGUSER: 'postgres'
-                    PGPASSWORD: 'example'
-                    PGDATABASE: 'users'
-                    PGPORT: '5454'
-
-Outputs:
-    ApiUrl:
-        Description: 'API Gateway endpoint'
-        Value:
-            Fn::Sub: 'https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/user'
+                    DDB_TABLE: HighStressUsers
+# Outputs:
+#     ApiUrl:
+#         Description: 'API Gateway endpoint'
+#         Value:
+#             Fn::Sub: 'https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/user'
